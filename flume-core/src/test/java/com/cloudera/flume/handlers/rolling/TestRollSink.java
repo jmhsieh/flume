@@ -389,4 +389,17 @@ public class TestRollSink {
     // See above for why there are 4 triggers:
     assertEquals(4, (long) rpt.getLongMetric(RollSink.A_ROLLS));
   }
+
+  /**
+   * Make sure the roller with a failing "internal" open or close doens't fail.
+   * This could like failure to close a file or failure to reconnect because
+   * hdfs goes down.
+   */
+  @Test
+  public void testInternalFail() {
+
+    RollSink snk = new RollSink(ctx, spec, maxAge, checkMs);
+  }
+
+
 }

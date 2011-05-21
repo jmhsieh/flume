@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.compress.CompressionCodec;
@@ -57,6 +58,7 @@ public class CustomDfsSink extends EventSink.Base {
 
   boolean compressOutput;
   OutputFormat format;
+  FSDataOutputStream fsout;
   OutputStream writer;
   AtomicLong count = new AtomicLong();
   String path;
@@ -240,5 +242,16 @@ public class CustomDfsSink extends EventSink.Base {
     rpt.setStringMetric(A_OUTPUTFORMAT, format.getBuilder().getName());
     rpt.setLongMetric(ReportEvent.A_COUNT, count.get());
     return rpt;
+  }
+  
+  /**
+   * Exposes Hadoop FSDataOutputStream.  Necessarily exposed to support sync.
+   */
+  public FSDataOutputStream getFSDataOutputStream() {
+    return fsout;
+  }
+  
+  public void flush() throws IOException {
+    fsout.sync(); // TODO reflection to determine to use sync, hflush, or hsync.
   }
 }

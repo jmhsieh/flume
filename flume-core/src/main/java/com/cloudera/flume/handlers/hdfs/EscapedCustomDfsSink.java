@@ -18,11 +18,14 @@
 package com.cloudera.flume.handlers.hdfs;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.MultipleIOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -191,5 +194,24 @@ public class EscapedCustomDfsSink extends EventSink.Base {
       }
 
     };
+  }
+
+  /**
+   * Flushes all subsinks.
+   * @throws IOException if any subsink fails throw exception
+   */
+  public void flush() throws IOException {
+    List<IOException> ioes = new ArrayList<IOException>();
+    for (Entry<String, CustomDfsSink> e : sfWriters.entrySet()) {
+      try {
+        e.getValue().flush();
+      } catch (IOException e1) {
+        ioes.add(e1);
+      }
+    }
+
+    if (ioes.size() > 0) {
+      throw MultipleIOException.createIOException(ioes);
+    }
   }
 }
