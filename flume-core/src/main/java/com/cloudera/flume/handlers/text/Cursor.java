@@ -28,6 +28,7 @@ import java.util.concurrent.BlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.cloudera.flume.conf.FlumeConfiguration;
 import com.cloudera.flume.core.Event;
 import com.cloudera.flume.core.EventImpl;
 
@@ -50,7 +51,9 @@ public class Cursor {
   // For following a file name
   final File file;
   // For buffering reads
-  final ByteBuffer buf = ByteBuffer.allocateDirect(Short.MAX_VALUE);
+  int maxBufferSize = (int) Math.min(Integer.MAX_VALUE, FlumeConfiguration
+      .get().getEventMaxSizeBytes() + 1);
+  final ByteBuffer buf = ByteBuffer.allocateDirect(maxBufferSize);
   // For closing file handles and getting FileChannels
   RandomAccessFile raf = null;
   // For reading data
@@ -208,7 +211,19 @@ public class Cursor {
     }
   }
 
-  boolean extractLines(ByteBuffer buf) throws IOException, InterruptedException {
+  /**
+   * Read through buffer, create events for content ending in newline. Reports
+   * whether a newline's encountered, if not and the buffer's full, that buffer
+   * is thrown away, and we skip contents up to the next newline.
+   * 
+   * @param buf
+   *          buffer to read
+   * @param skip
+   *          whether to skip content
+   * @return whether we encountered a newline
+   */
+  boolean extractLines(ByteBuffer buf, boolean skip) throws IOException,
+      InterruptedException {
     boolean madeProgress = false;
     int start = buf.position();
     buf.mark();
@@ -225,9 +240,13 @@ public class Cursor {
         buf.mark(); // new mark.
         start = buf.position();
 
-        Event e = new EventImpl(body);
-        e.set(TailSource.A_TAILSRCFILE, file.getName().getBytes());
-        sync.put(e);
+        if (!skip) {
+          Event e = new EventImpl(body);
+          e.set(TailSource.A_TAILSRCFILE, file.getName().getBytes());
+          sync.put(e);
+        } else {
+          skip = false;
+        }
         madeProgress = true;
       }
     }
@@ -346,29 +365,38 @@ public class Cursor {
     // copy data from current file pointer to EOF to dest.
     boolean madeProgress = false;
 
+    boolean skip = false;
     int rd;
     while ((rd = in.read(buf)) > 0) {
       madeProgress = true;
 
       // need char encoder to find line breaks in buf.
-      lastChannelPos += (rd < 0 ? 0 : rd); // rd == -1 if at end of
-      // stream.
+      lastChannelPos += (rd < 0 ? 0 : rd); // rd == -1 if at end of stream.
 
       int lastRd = 0;
-      boolean progress = false;
-      do {
+      boolean eventProgress = false;
+      
+      if (lastRd == -1 && rd == -1) {
+        return true;
+      }
 
-        if (lastRd == -1 && rd == -1) {
-          return true;
+      buf.flip();
+
+      // extract lines
+      eventProgress = extractLines(buf, skip);
+      if (eventProgress) {
+        skip = false;
+      } else {
+        if (buf.position() == buf.capacity()) {
+          // we have a full buffer w/o newlines. We have too much data for an
+          // event, so
+          // we clear it and skip to the next newline.
+          buf.clear();
+          skip = true;
         }
+      }
 
-        buf.flip();
-
-        // extract lines
-        extractLines(buf);
-
-        lastRd = rd;
-      } while (progress); // / potential race
+      lastRd = rd;
 
       // if the amount read catches up to the size of the file, we can fall
       // out and let another fileChannel be read. If the last buffer isn't
