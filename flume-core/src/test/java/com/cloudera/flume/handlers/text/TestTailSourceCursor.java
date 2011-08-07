@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
@@ -42,6 +43,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.mortbay.log.Log;
 
+import com.cloudera.flume.conf.FlumeConfiguration;
 import com.cloudera.flume.core.Event;
 import com.cloudera.util.Clock;
 import com.cloudera.util.FileUtil;
@@ -740,5 +742,54 @@ public class TestTailSourceCursor {
       q.clear();
     }
     Log.info("file handles didn't leak!");
+  }
+
+  /**
+   * Test that we drop data if tail attempts to pull in data longer than max
+   * event size.
+   * 
+   * @throws IOException
+   * @throws InterruptedException
+   */
+  @Test
+  public void testTestHugeLine() throws IOException, InterruptedException {
+    BlockingQueue<Event> q = new ArrayBlockingQueue<Event>(100);
+
+    int bufsize = (int) Math.max(Short.MAX_VALUE, FlumeConfiguration.get()
+        .getEventMaxSizeBytes() + 1);
+    File f = FileUtil.createTempFile("longEvent", ".test");
+    f.deleteOnExit();
+    FileOutputStream fos = new FileOutputStream(f);
+
+    // strip data do make it easy to see what data is being read
+    ByteBuffer buf = ByteBuffer.allocate(18 * bufsize);
+    byte b = (byte) 'A';
+    for (int i = 0; i < 10; i++) {
+      for (int j = 0; j < bufsize; j++) {
+        buf.put(b);
+      }
+      b++;
+    }
+    fos.write(buf.array());
+    fos.write('\n');
+
+    ByteBuffer buf2 = ByteBuffer.allocate(18 * bufsize);
+    for (int i = 0; i < 10; i++) {
+      for (int j = 0; j < bufsize; j++) {
+        buf2.put(b);
+      }
+      b++;
+    }
+    fos.write(buf2.array());
+    fos.write('\n');
+    fos.close();
+
+    Cursor c = new Cursor(q, f);
+    assertTrue(c.tailBody()); // open
+    assertTrue(c.tailBody()); // drain the data
+    assertFalse(c.tailBody()); // done.
+
+    assertEquals(2, q.size());
+
   }
 }
