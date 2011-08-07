@@ -51,8 +51,8 @@ public class Cursor {
   // For following a file name
   final File file;
   // For buffering reads
-  int maxBufferSize = (int) Math.min(Integer.MAX_VALUE, FlumeConfiguration
-      .get().getEventMaxSizeBytes() + 1);
+  int maxBufferSize = (int) Math.max(Short.MAX_VALUE, FlumeConfiguration.get()
+      .getEventMaxSizeBytes());
   final ByteBuffer buf = ByteBuffer.allocateDirect(maxBufferSize);
   // For closing file handles and getting FileChannels
   RandomAccessFile raf = null;
