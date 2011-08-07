@@ -62,6 +62,7 @@ public class TestTailSource {
   public void setDebug() {
     Logger.getLogger(TestTailSource.class).setLevel(Level.DEBUG);
     Logger.getLogger(TailSource.class).setLevel(Level.DEBUG);
+    Logger.getLogger(Cursor.class).setLevel(Level.DEBUG);
   }
 
   void runDriver(final EventSource src, final EventSink snk,

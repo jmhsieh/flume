@@ -225,6 +225,7 @@ public class Cursor {
   boolean extractLines(ByteBuffer buf, boolean skip) throws IOException,
       InterruptedException {
     boolean madeProgress = false;
+    // buf needs to be in get mode
     int start = buf.position();
     buf.mark();
     while (buf.hasRemaining()) {
@@ -262,7 +263,7 @@ public class Cursor {
    * 
    * Returns true if cursor's state has changed (progress was made)
    */
-  boolean tailBody() throws InterruptedException {
+  public boolean tailBody() throws InterruptedException {
     try {
       // no file named f currently, needs to be opened.
       if (in == null) {
@@ -373,30 +374,31 @@ public class Cursor {
       // need char encoder to find line breaks in buf.
       lastChannelPos += (rd < 0 ? 0 : rd); // rd == -1 if at end of stream.
 
-      int lastRd = 0;
       boolean eventProgress = false;
-      
-      if (lastRd == -1 && rd == -1) {
-        return true;
-      }
-
-      buf.flip();
+      buf.flip(); // flip into get mode
 
       // extract lines
       eventProgress = extractLines(buf, skip);
       if (eventProgress) {
         skip = false;
       } else {
-        if (buf.position() == buf.capacity()) {
+        if (buf.position() == buf.capacity() && !skip) {
           // we have a full buffer w/o newlines. We have too much data for an
           // event, so
           // we clear it and skip to the next newline.
-          buf.clear();
+          buf.reset();
+          byte[] bs = new byte[(int)FlumeConfiguration.get()
+                               .getEventMaxSizeBytes()];
+          buf.get(bs);
+          EventImpl evt = new EventImpl(bs);
+          sync.add(evt);
+          
+          buf.flip();
           skip = true;
+        } else {
+          buf.clear();
         }
       }
-
-      lastRd = rd;
 
       // if the amount read catches up to the size of the file, we can fall
       // out and let another fileChannel be read. If the last buffer isn't

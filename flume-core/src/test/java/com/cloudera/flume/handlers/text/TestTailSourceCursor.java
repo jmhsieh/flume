@@ -59,6 +59,8 @@ public class TestTailSourceCursor {
   @Before
   public void setDebug() {
     Logger.getLogger(TailSource.class).setLevel(Level.DEBUG);
+    Logger.getLogger(Cursor.class).setLevel(Level.DEBUG);
+    
   }
 
   File createDataFile(int count) throws IOException {
@@ -790,6 +792,7 @@ public class TestTailSourceCursor {
     assertFalse(c.tailBody()); // done.
 
     assertEquals(2, q.size());
-
+    
+    
   }
 }
