@@ -47,6 +47,12 @@ import com.cloudera.flume.core.EventImpl;
 public class Cursor {
   private static final Logger LOG = LoggerFactory.getLogger(Cursor.class);
 
+  enum CursorState {
+    EMPTY, NEED_DATA, OPENED, BUFFER, NEED_DELIM, END_OF_FILE, ERROR_ISDIR, ERROR_CANTREAD
+  };
+
+  CursorState state = CursorState.EMPTY;
+
   final BlockingQueue<Event> sync;
   // For following a file name
   final File file;
@@ -76,6 +82,7 @@ public class Cursor {
     this.lastChannelSize = lastFileLen;
     this.lastFileMod = lastMod;
     this.readFailures = 0;
+    this.state = CursorState.EMPTY;
   }
 
   /**
@@ -178,15 +185,18 @@ public class Cursor {
       IOException ioe = new IOException("Tail expects a file '" + file
           + "', but it is a dir!");
       LOG.error(ioe.getMessage());
+      state = CursorState.ERROR_ISDIR;
       throw ioe;
     }
 
     if (!file.exists()) {
       LOG.debug("Tail '" + file + "': nothing to do, waiting for a file");
+      state = CursorState.NEED_DATA;
       return false; // do nothing
     }
 
     if (!file.canRead()) {
+      state = CursorState.ERROR_CANTREAD;
       throw new IOException("Permission denied on " + file);
     }
 
@@ -202,11 +212,13 @@ public class Cursor {
       LOG.debug("Tail '" + file + "': opened last mod=" + lastFileMod
           + " lastChannelPos=" + lastChannelPos + " lastChannelSize="
           + lastChannelSize);
+      state = CursorState.OPENED;
       return true;
     } catch (FileNotFoundException fnfe) {
       // possible because of file system race, we can recover from this.
       LOG.debug("Tail '" + file
           + "': a file existed then disappeared, odd but continue");
+      state = CursorState.NEED_DATA;
       return false;
     }
   }
@@ -283,6 +295,7 @@ public class Cursor {
         // method will never discover the rotation.
         lastFileMod = file.lastModified();
         LOG.debug("tail " + file + " : new data found");
+        state = CursorState.BUFFER;
         return true;
       }
 
@@ -295,6 +308,7 @@ public class Cursor {
       // 1) no change -> return
       if (flen == lastChannelSize && fmod == lastFileMod) {
         LOG.debug("tail " + file + " : no change");
+        state = CursorState.NEED_DATA;
         return false;
       }
 
