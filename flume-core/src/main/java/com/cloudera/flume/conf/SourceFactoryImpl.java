@@ -55,6 +55,7 @@ import com.cloudera.flume.handlers.text.TailSource;
 import com.cloudera.flume.handlers.thrift.PrioritizedThriftEventSource;
 import com.cloudera.flume.handlers.thrift.ThriftEventSource;
 import com.cloudera.flume.handlers.twitter.TwitterStreamSource;
+import com.cloudera.flume.handlers.socket.UdpSource;
 import com.cloudera.util.Pair;
 
 /**
@@ -109,7 +110,8 @@ public class SourceFactoryImpl extends SourceFactory {
       // TODO (jon) deprecate these, use format, make arg to
       // text/tail/console
 
-      { "log4jfile", Log4jTextFileSource.builder() }, };
+      { "log4jfile", Log4jTextFileSource.builder() },
+      { "udp", UdpSource.builder() }};
 
   Map<String, SourceBuilder> sources = new HashMap<String, SourceBuilder>();
 
